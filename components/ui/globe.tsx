@@ -1,4 +1,5 @@
 "use client";
+
 import { useEffect, useRef, useState } from "react";
 import {
   Color,
@@ -13,15 +14,17 @@ import {
   Vector2,
   Object3D,
 } from "three";
+
 import ThreeGlobe from "three-globe";
 import { Canvas, extend, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
+
 import countries from "@/data/globe.json";
 
 extend({ ThreeGlobe });
 
 /* -------------------------------------------------------------------------- */
-/*                                TYPES SETUP                                 */
+/*                                   TYPES                                    */
 /* -------------------------------------------------------------------------- */
 
 export interface PlayerInfo {
@@ -86,7 +89,7 @@ function createPin(color: string): Group {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                           LAT / LNG TO XYZ                                 */
+/*                           LAT/LNG → XYZ                                   */
 /* -------------------------------------------------------------------------- */
 
 function latLngToXYZ(lat: number, lng: number, radius = 100): Vector3 {
@@ -101,7 +104,7 @@ function latLngToXYZ(lat: number, lng: number, radius = 100): Vector3 {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                         PIN CLICK HANDLER COMPONENT                        */
+/*                             PIN CLICK HANDLER                               */
 /* -------------------------------------------------------------------------- */
 
 function PinClickHandler({
@@ -122,9 +125,7 @@ function PinClickHandler({
   const mouse = new Vector2();
 
   useEffect(() => {
-    function handleClick(ev: PointerEvent) {
-      if (typeof window === "undefined") return;
-
+    const onClick = (ev: PointerEvent) => {
       const rect = gl.domElement.getBoundingClientRect();
       mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
@@ -143,41 +144,49 @@ function PinClickHandler({
       const info = pin.userData as PlayerInfo;
 
       onPinClick?.(info, headWorld, camera);
-    }
+    };
 
-    gl.domElement.addEventListener("pointerdown", handleClick);
-    return () => gl.domElement.removeEventListener("pointerdown", handleClick);
+    gl.domElement.addEventListener("pointerdown", onClick);
+    return () => gl.domElement.removeEventListener("pointerdown", onClick);
   }, [gl, camera, onPinClick]);
 
   return null;
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                 WORLD                                      */
+/*                                   WORLD                                    */
 /* -------------------------------------------------------------------------- */
 
-const aspect = 1.2;
-const cameraZ = 330;
-
 export function World({ globeConfig, data, onPinClick }: WorldProps) {
-  const [camera] = useState(() => new PerspectiveCamera(45, aspect, 0.1, 2000));
+  const [camera] = useState(() => new PerspectiveCamera(45, 1.2, 0.1, 2000));
   const pinsRef = useRef<Object3D[]>([]);
 
   useEffect(() => {
-    camera.position.set(0, 0, cameraZ);
+    camera.position.set(0, 0, 330);
   }, [camera]);
 
-  function addPin(pin: Object3D) {
-    pinsRef.current.push(pin);
-  }
+  const addPinToScene = (pin: Object3D) => pinsRef.current.push(pin);
 
   return (
     <Canvas camera={camera} gl={{ antialias: true, alpha: true }}>
-      <ambientLight intensity={0.7} />
-      <directionalLight position={[-400, 200, 300]} />
-      <directionalLight position={[300, 500, 300]} />
+      {/* Ambient fill → bright glossy top */}
+      <ambientLight
+        intensity={globeConfig.ambientLightIntensity}
+        color={globeConfig.ambientLight}
+      />
 
-      <Globe globeConfig={globeConfig} data={data} addPinToScene={addPin} />
+      {/* Main top light → glossy silver highlight */}
+      <directionalLight
+        position={[0, 400, 300]}
+        intensity={globeConfig.pointLightIntensity}
+        color={globeConfig.pointLightColor}
+      />
+
+      <Globe
+        globeConfig={globeConfig}
+        data={data}
+        addPinToScene={addPinToScene}
+      />
 
       <PinClickHandler
         pinsRef={pinsRef}
@@ -187,15 +196,15 @@ export function World({ globeConfig, data, onPinClick }: WorldProps) {
 
       <OrbitControls
         enableZoom={false}
-        enablePan={false}
         enableRotate={false}
+        enablePan={false}
       />
     </Canvas>
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                  GLOBE                                     */
+/*                                   GLOBE                                     */
 /* -------------------------------------------------------------------------- */
 
 export function Globe({ globeConfig, data, addPinToScene }: GlobeProps) {
@@ -203,6 +212,7 @@ export function Globe({ globeConfig, data, addPinToScene }: GlobeProps) {
   const groupRef = useRef<Group | null>(null);
   const [ready, setReady] = useState(false);
 
+  /* Init ThreeGlobe */
   useEffect(() => {
     if (!globeRef.current && groupRef.current) {
       globeRef.current = new ThreeGlobe();
@@ -211,14 +221,20 @@ export function Globe({ globeConfig, data, addPinToScene }: GlobeProps) {
     }
   }, []);
 
+  /* Material updates */
   useEffect(() => {
     if (!ready) return;
 
     const mat = globeRef.current.globeMaterial();
+
     mat.color = new Color(globeConfig.globeColor);
-    mat.emissiveIntensity = 0.1;
+    mat.emissive = new Color(globeConfig.emissive);
+    mat.emissiveIntensity = globeConfig.emissiveIntensity;
+    mat.shininess = globeConfig.shininess;
+    mat.specular = new Color("#ffffff"); // glossy white highlight
   }, [ready, globeConfig]);
 
+  /* Atmosphere + polygons + pins */
   useEffect(() => {
     if (!ready) return;
 
@@ -227,23 +243,23 @@ export function Globe({ globeConfig, data, addPinToScene }: GlobeProps) {
       .hexPolygonResolution(3)
       .hexPolygonMargin(0.5)
       .showAtmosphere(true)
-      .atmosphereColor("#ffffff")
-      .atmosphereAltitude(0.25)
-      .hexPolygonColor(() => "rgba(255,255,255,0.15)");
+      .atmosphereColor(globeConfig.atmosphereColor)
+      .atmosphereAltitude(globeConfig.atmosphereAltitude)
+      .hexPolygonColor(() => globeConfig.polygonColor);
 
+    /* Add pins */
     data.forEach((p) => {
       const pin = createPin(p.color);
       const pos = latLngToXYZ(p.lat, p.lng, 100);
 
       pin.position.copy(pos);
-
       pin.userData = p;
       pin.children.forEach((child) => (child.userData = p));
 
       groupRef.current!.add(pin);
       addPinToScene(pin);
     });
-  }, [ready, data]);
+  }, [ready, data, globeConfig]);
 
   return <group ref={groupRef} />;
 }

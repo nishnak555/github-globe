@@ -122,19 +122,29 @@ export default function ClientHome() {
       color: "#FF6A00",
     },
   ];
-  const globeConfig = {
-    globeColor: "#0B0B0B",
-    atmosphereColor: "#FFFFFF",
-    atmosphereAltitude: 0.35,
-    emissive: "#000000",
-    emissiveIntensity: 0.03,
-    polygonColor: "rgba(255,255,255,0.35)",
-    ambientLight: "#FFFFFF",
-    ambientLightIntensity: 0.6,
-    pointLightColor: "#FFFFFF",
-    pointLightIntensity: 2.5,
-    shininess: 0.6,
-  };
+const globeConfig = {
+  globeColor: "#1A1A1A", // slightly brighter base
+  atmosphereColor: "#FFFFFF",
+  atmosphereAltitude: 0.12, // tighter glow like reference
+
+  emissive: "#0A0A0A",
+  emissiveIntensity: 0.05, // subtle emissive, not too strong
+
+  polygonColor: "rgba(255, 255, 255, 0.55)", // brighter dotted countries
+
+  ambientLight: "#FFFFFF",
+  ambientLightIntensity: 0.85, // boosts overall visibility
+
+  pointLightColor: "#FFFFFF",
+  pointLightIntensity: 2.8, // creates the top highlight
+
+  shininess: 0.9, // glassy look like your screenshot
+
+  // OPTIONAL but improves realism
+  diffuse: "#C0C0C0", // soft gray shading
+  diffuseIntensity: 1.2,
+};
+
 
   return (
     <div className="w-full bg-black text-white overflow-hidden">
