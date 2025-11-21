@@ -141,9 +141,17 @@ export default function ClientHome() {
 
 return (
   <div className="w-screen h-screen bg-black relative overflow-hidden">
-    {/* Globe pushed DOWN */}
+    {/* Player Card - rendered first, behind globe/pin */}
+    <PlayerCard
+      data={selected}
+      pinPosition={pinPos}
+      camera={camera}
+      onClose={() => setSelected(null)}
+    />
+
+    {/* Globe - rendered after card, so pin appears in front */}
     <div className="w-full h-full flex items-end justify-center pb-20">
-      <div className="w-[550px] h-[550px] relative z- -10">
+      <div className="w-[550px] h-[550px] relative z-20">
         <World
           globeConfig={globeConfig}
           data={sampleData}
@@ -160,14 +168,6 @@ return (
         />
       </div>
     </div>
-
-    {/* Player Card */}
-    <PlayerCard
-      data={selected}
-      pinPosition={pinPos}
-      camera={camera}
-      onClose={() => setSelected(null)}
-    />
   </div>
 );
 
