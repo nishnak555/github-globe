@@ -139,24 +139,32 @@ export default function ClientHome() {
     diffuseIntensity: 1.2,
   };
 
-  return (
-    <div className="w-screen h-screen bg-black flex items-center justify-center relative overflow-hidden">
-      <World
-        globeConfig={globeConfig}
-        data={sampleData}
-        onPinClick={(info, headPos, cam) => {
-          setSelected(info);
-          setPinPos(headPos);
-          setCamera(cam);
-        }}
-      />
-
-      <PlayerCard
-        data={selected}
-        pinPosition={pinPos}
-        camera={camera}
-        onClose={() => setSelected(null)}
-      />
+return (
+  <div className="w-screen h-screen bg-black relative overflow-hidden">
+    {/* Globe pushed DOWN */}
+    <div className="w-full h-full flex items-end justify-center pb-20">
+      <div className="w-[550px] h-[550px]">
+        <World
+          globeConfig={globeConfig}
+          data={sampleData}
+          onPinClick={(info, headPos, cam) => {
+            setSelected(info);
+            setPinPos(headPos);
+            setCamera(cam);
+          }}
+        />
+      </div>
     </div>
-  );
+
+    {/* Player Card */}
+    <PlayerCard
+      data={selected}
+      pinPosition={pinPos}
+      camera={camera}
+      onClose={() => setSelected(null)}
+    />
+  </div>
+);
+
+
 }
