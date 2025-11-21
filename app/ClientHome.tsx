@@ -143,7 +143,7 @@ return (
   <div className="w-screen h-screen bg-black relative overflow-hidden">
     {/* Globe pushed DOWN */}
     <div className="w-full h-full flex items-end justify-center pb-20">
-      <div className="w-[550px] h-[550px]">
+      <div className="w-[550px] h-[550px] relative z- -10">
         <World
           globeConfig={globeConfig}
           data={sampleData}

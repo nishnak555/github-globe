@@ -41,32 +41,44 @@ export default function PlayerCard({
   useEffect(() => {
     if (!data || !pinPosition || !camera) return;
 
-    // Tilt effect based on camera direction
-    const camDir = pinPosition.clone().sub(camera.position).normalize();
-    setTilt({
-      rx: camDir.y * -22,
-      ry: camDir.x * 30,
-    });
-
     const canvas = document.querySelector("canvas") as HTMLCanvasElement | null;
     if (!canvas) return;
 
-    // Offset pin slightly downward (so card attaches to top of pin)
-    const PIN_HEAD_RADIUS = 4.4;
-    const head = pinPosition.clone();
-    head.y -= PIN_HEAD_RADIUS;
+    // Calculate globe surface position (globe radius = 100)
+    const GLOBE_RADIUS = 100;
+    const pinDir = pinPosition.clone().normalize();
+    const globeSurfacePos = pinDir.multiplyScalar(GLOBE_RADIUS);
+    
+    // Pin head position is already in world space
+    const pinHeadWorld = pinPosition.clone();
 
-    // Convert head position to 2D screen
-    const projected = head.project(camera);
+    // Project both globe surface and pin head to screen coordinates
+    const surfaceProjected = globeSurfacePos.project(camera);
+    const pinHeadProjected = pinHeadWorld.project(camera);
     const rect = canvas.getBoundingClientRect();
 
-    let sx = rect.left + (projected.x + 1) * 0.5 * rect.width;
-    let sy = rect.top + (1 - projected.y) * 0.5 * rect.height;
+    // Screen positions
+    const surfaceScreenX = rect.left + (surfaceProjected.x + 1) * 0.5 * rect.width;
+    const surfaceScreenY = rect.top + (1 - surfaceProjected.y) * 0.5 * rect.height;
+    const pinHeadScreenX = rect.left + (pinHeadProjected.x + 1) * 0.5 * rect.width;
+    const pinHeadScreenY = rect.top + (1 - pinHeadProjected.y) * 0.5 * rect.height;
 
-    // Offset card for cleaner visibility
-    const OFFSET = 22;
-    sx -= CARD_WIDTH - OFFSET;
-    sy -= CARD_HEIGHT - OFFSET;
+    // Tilt effect based on camera direction relative to globe surface
+    const camDir = globeSurfacePos.clone().sub(camera.position).normalize();
+    setTilt({
+      rx: camDir.y * -18,
+      ry: camDir.x * 25,
+    });
+
+    // Position card on globe surface, with bottom-right corner near pin head
+    // Card appears on globe surface, pin head is in front (rendered by canvas above)
+    const CORNER_OFFSET_X = CARD_WIDTH - 30;
+    const CORNER_OFFSET_Y = CARD_HEIGHT - 26;
+    
+    // Position card so its bottom-right corner aligns with pin head position
+    // This makes it appear the card is pinned to the globe surface
+    const sx = pinHeadScreenX - CORNER_OFFSET_X;
+    const sy = pinHeadScreenY - CORNER_OFFSET_Y;
 
     setScreenPos({ x: sx, y: sy });
   }, [data, pinPosition, camera]);
@@ -82,39 +94,54 @@ export default function PlayerCard({
         top: screenPos.y,
         width: CARD_WIDTH,
         height: CARD_HEIGHT,
-        transform: `rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`,
+        transform: `rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg) rotateZ(-8deg)`,
         transformOrigin: "bottom right",
         transition: "all .25s ease-out",
-        zIndex: 999,
+        zIndex: 5,
+        pointerEvents: "auto",
       }}
       className="
-        rounded-[22px]
-        bg-[#1d1d1d]/95 backdrop-blur
-        border border-[#2a2a2a]
-        shadow-[0_30px_80px_rgba(0,0,0,.7)]
+        relative flex flex-col rounded-[28px]
+        bg-[#0c0c0c]/95
+        border border-white/8
+        shadow-[0_45px_90px_rgba(0,0,0,.85)]
         text-white overflow-hidden
+        backdrop-blur-md
       "
     >
-      <img
-        src={data.image}
-        className="w-full h-40 object-cover opacity-95"
-        alt={data.name}
-      />
+      <div className="relative h-[195px] overflow-hidden">
+        <img
+          src={data.image}
+          className="absolute inset-0 h-full w-full object-cover scale-[1.05]"
+          alt={data.name}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-black/15 to-black/75" />
 
-      <div className="p-4">
-        <h2 className="text-lg font-semibold text-white">{data.name}</h2>
-        <p className="text-sm text-gray-300">{data.team}</p>
+        <div className="absolute bottom-6 left-6 right-6">
+          <p className="text-xs uppercase tracking-[0.35em] text-white/70">
+            {data.team}
+          </p>
+          <h2 className="text-2xl font-semibold leading-tight">{data.name}</h2>
+        </div>
+      </div>
 
-        <div className="mt-3 flex items-center gap-2 text-sm text-gray-300">
-          <Globe size={14} className="opacity-80" /> {data.country}
+      <div className="flex flex-1 flex-col justify-between px-6 py-5 gap-4 bg-gradient-to-b from-[#111111]/80 to-black">
+        <div>
+          <p className="text-sm text-white/70">{data.team}</p>
+          <h3 className="text-xl font-semibold">{data.name}</h3>
+        </div>
+
+        <div className="flex items-center gap-2 text-sm text-white/80">
+          <Globe size={16} className="opacity-80" />
+          {data.country}
         </div>
 
         <button
           onClick={onClose}
           className="
-            mt-4 text-xs px-3 py-1.5
-            bg-white/20 hover:bg-white/30
-            rounded text-white
+            self-start rounded-full border border-white/15
+            bg-white/10 px-4 py-1.5 text-xs font-medium text-white/90
+            transition hover:bg-white/20
           "
         >
           Close
