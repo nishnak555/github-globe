@@ -107,14 +107,18 @@ function latLngToXYZ(lat: number, lng: number, radius = 100): Vector3 {
 /*                             PIN CLICK HANDLER                               */
 /* -------------------------------------------------------------------------- */
 
-function PinClickHandler({
+/* -------------------------------------------------------------------------- */
+/*                             PIN HOVER HANDLER                               */
+/* -------------------------------------------------------------------------- */
+
+function PinHoverHandler({
   pinsRef,
   camera,
-  onPinClick,
+  onPinHover,
 }: {
   pinsRef: React.MutableRefObject<Object3D[]>;
   camera: PerspectiveCamera;
-  onPinClick?: (
+  onPinHover?: (
     info: PlayerInfo,
     headPos: Vector3,
     camera: PerspectiveCamera
@@ -124,34 +128,42 @@ function PinClickHandler({
   const raycaster = new Raycaster();
   const mouse = new Vector2();
 
+  let lastHovered: Object3D | null = null;
+
   useEffect(() => {
-    const onClick = (ev: PointerEvent) => {
+    const onMove = (ev: PointerEvent) => {
       const rect = gl.domElement.getBoundingClientRect();
       mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
 
       raycaster.setFromCamera(mouse, camera);
-
       const hits = raycaster.intersectObjects(pinsRef.current, true);
-      if (!hits.length) return;
 
-      const hit = hits[0];
-      const pin = hit.object;
+      if (!hits.length) {
+        lastHovered = null;
+        return;
+      }
+
+      const hit = hits[0].object;
+
+      if (hit === lastHovered) return; // prevent firing repeatedly
+      lastHovered = hit;
 
       const headLocal = new Vector3(0, 10, 0);
-      const headWorld = pin.localToWorld(headLocal.clone());
+      const headWorld = hit.localToWorld(headLocal.clone());
 
-      const info = pin.userData as PlayerInfo;
+      const info = hit.userData as PlayerInfo;
 
-      onPinClick?.(info, headWorld, camera);
+      onPinHover?.(info, headWorld, camera);
     };
 
-    gl.domElement.addEventListener("pointerdown", onClick);
-    return () => gl.domElement.removeEventListener("pointerdown", onClick);
-  }, [gl, camera, onPinClick]);
+    gl.domElement.addEventListener("pointermove", onMove);
+    return () => gl.domElement.removeEventListener("pointermove", onMove);
+  }, [gl, camera, onPinHover]);
 
   return null;
 }
+
 
 /* -------------------------------------------------------------------------- */
 /*                                   WORLD                                    */
@@ -188,10 +200,10 @@ export function World({ globeConfig, data, onPinClick }: WorldProps) {
         addPinToScene={addPinToScene}
       />
 
-      <PinClickHandler
+      <PinHoverHandler
         pinsRef={pinsRef}
         camera={camera}
-        onPinClick={onPinClick}
+        onPinHover={onPinClick}
       />
 
       <OrbitControls

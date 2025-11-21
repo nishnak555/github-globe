@@ -122,61 +122,41 @@ export default function ClientHome() {
       color: "#FF6A00",
     },
   ];
-const globeConfig = {
-  globeColor: "#1A1A1A", // slightly brighter base
-  atmosphereColor: "#FFFFFF",
-  atmosphereAltitude: 0.12, // tighter glow like reference
 
-  emissive: "#0A0A0A",
-  emissiveIntensity: 0.05, // subtle emissive, not too strong
-
-  polygonColor: "rgba(255, 255, 255, 0.55)", // brighter dotted countries
-
-  ambientLight: "#FFFFFF",
-  ambientLightIntensity: 0.85, // boosts overall visibility
-
-  pointLightColor: "#FFFFFF",
-  pointLightIntensity: 2.8, // creates the top highlight
-
-  shininess: 0.9, // glassy look like your screenshot
-
-  // OPTIONAL but improves realism
-  diffuse: "#C0C0C0", // soft gray shading
-  diffuseIntensity: 1.2,
-};
-
+  const globeConfig = {
+    globeColor: "#1A1A1A",
+    atmosphereColor: "#FFFFFF",
+    atmosphereAltitude: 0.12,
+    emissive: "#0A0A0A",
+    emissiveIntensity: 0.05,
+    polygonColor: "rgba(255, 255, 255, 0.55)",
+    ambientLight: "#FFFFFF",
+    ambientLightIntensity: 0.85,
+    pointLightColor: "#FFFFFF",
+    pointLightIntensity: 2.8,
+    shininess: 0.9,
+    diffuse: "#C0C0C0",
+    diffuseIntensity: 1.2,
+  };
 
   return (
-    <div className="w-full bg-black text-white overflow-hidden">
-      <div className="relative w-full h-[75vh]">
-        <div className="absolute inset-0">
-          <World
-            globeConfig={globeConfig}
-            data={sampleData}
-            onPinClick={(info, headPos, cam) => {
-              setSelected(info);
-              setPinPos(headPos);
-              setCamera(cam);
-            }}
-          />
-        </div>
+    <div className="w-screen h-screen bg-black flex items-center justify-center relative overflow-hidden">
+      <World
+        globeConfig={globeConfig}
+        data={sampleData}
+        onPinClick={(info, headPos, cam) => {
+          setSelected(info);
+          setPinPos(headPos);
+          setCamera(cam);
+        }}
+      />
 
-        <PlayerCard
-          data={selected}
-          pinPosition={pinPos}
-          camera={camera}
-          onClose={() => setSelected(null)}
-        />
-      </div>
-
-      <div className="w-full px-10 py-32 -mt-24 relative z-20">
-        <p className="text-orange-400 uppercase text-sm mb-4">● Ecosystem</p>
-
-        <h1 className="text-5xl md:text-6xl font-light leading-tight">
-          We bridge sports, gaming, and lifestyle by transforming collectibles
-          into dynamic, cross-platform assets across mobile games.
-        </h1>
-      </div>
+      <PlayerCard
+        data={selected}
+        pinPosition={pinPos}
+        camera={camera}
+        onClose={() => setSelected(null)}
+      />
     </div>
   );
 }
