@@ -148,6 +148,11 @@ return (
           globeConfig={globeConfig}
           data={sampleData}
           onPinClick={(info, headPos, cam) => {
+            if (!info) {
+              // USER MOVED AWAY FROM PIN → CLOSE CARD
+              setSelected(null);
+              return;
+            }
             setSelected(info);
             setPinPos(headPos);
             setCamera(cam);

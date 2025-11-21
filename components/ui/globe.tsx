@@ -24,7 +24,7 @@ import countries from "@/data/globe.json";
 extend({ ThreeGlobe });
 
 /* -------------------------------------------------------------------------- */
-/*                                   TYPES                                    */
+/*                               TYPES                                         */
 /* -------------------------------------------------------------------------- */
 
 export interface PlayerInfo {
@@ -41,9 +41,9 @@ interface WorldProps {
   globeConfig: any;
   data: PlayerInfo[];
   onPinClick?: (
-    info: PlayerInfo,
-    headPos: Vector3,
-    camera: PerspectiveCamera
+    info: PlayerInfo | null,
+    headPos: Vector3 | null,
+    camera: PerspectiveCamera | null
   ) => void;
 }
 
@@ -54,7 +54,45 @@ interface GlobeProps {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                CREATE PIN                                   */
+/*                         HELPERS / ANIMATIONS                               */
+/* -------------------------------------------------------------------------- */
+
+function easeOutCubic(t: number) {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+function tweenScale(mesh: Object3D, target: number, duration = 180) {
+  const start = mesh.scale.x;
+  const end = target;
+  let startTime: number | null = null;
+
+  function animate(time: number) {
+    if (startTime === null) startTime = time;
+
+    const progress = Math.min((time - startTime) / duration, 1);
+    const eased = start + (end - start) * easeOutCubic(progress);
+
+    mesh.scale.set(eased, eased, eased);
+
+    if (progress < 1) requestAnimationFrame(animate);
+  }
+
+  requestAnimationFrame(animate);
+}
+
+function latLngToXYZ(lat: number, lng: number, radius = 100) {
+  const phi = ((90 - lat) * Math.PI) / 180;
+  const theta = ((lng + 180) * Math.PI) / 180;
+
+  return new Vector3(
+    -(radius * Math.sin(phi) * Math.cos(theta)),
+    radius * Math.cos(phi),
+    radius * (Math.sin(phi) * Math.sin(theta))
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              CREATE PIN HEAD + STEM                         */
 /* -------------------------------------------------------------------------- */
 
 function createPin(color: string): Group {
@@ -85,27 +123,10 @@ function createPin(color: string): Group {
   group.add(head);
   group.add(stem);
 
+  (group.userData as any).head = head;
+
   return group;
 }
-
-/* -------------------------------------------------------------------------- */
-/*                           LAT/LNG → XYZ                                   */
-/* -------------------------------------------------------------------------- */
-
-function latLngToXYZ(lat: number, lng: number, radius = 100): Vector3 {
-  const phi = ((90 - lat) * Math.PI) / 180;
-  const theta = ((lng + 180) * Math.PI) / 180;
-
-  return new Vector3(
-    -(radius * Math.sin(phi) * Math.cos(theta)),
-    radius * Math.cos(phi),
-    radius * Math.sin(phi) * Math.sin(theta)
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/*                             PIN CLICK HANDLER                               */
-/* -------------------------------------------------------------------------- */
 
 /* -------------------------------------------------------------------------- */
 /*                             PIN HOVER HANDLER                               */
@@ -119,75 +140,106 @@ function PinHoverHandler({
   pinsRef: React.MutableRefObject<Object3D[]>;
   camera: PerspectiveCamera;
   onPinHover?: (
-    info: PlayerInfo,
-    headPos: Vector3,
-    camera: PerspectiveCamera
+    info: PlayerInfo | null,
+    headPos: Vector3 | null,
+    camera: PerspectiveCamera | null
   ) => void;
 }) {
   const { gl } = useThree();
   const raycaster = new Raycaster();
   const mouse = new Vector2();
 
-  let lastHovered: Object3D | null = null;
+  let lastHoveredPin: Object3D | null = null;
+  let shrinkTimeout: number | null = null;
 
   useEffect(() => {
-    const onMove = (ev: PointerEvent) => {
+    const handleMove = (ev: PointerEvent) => {
       const rect = gl.domElement.getBoundingClientRect();
+
       mouse.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
 
       raycaster.setFromCamera(mouse, camera);
       const hits = raycaster.intersectObjects(pinsRef.current, true);
 
+      // No pin hovered
       if (!hits.length) {
-        lastHovered = null;
+        if (lastHoveredPin) {
+          const head = (lastHoveredPin.userData as any).head;
+          if (head) tweenScale(head, 1.0, 180);
+
+          lastHoveredPin = null;
+        }
+
+        onPinHover?.(null, null, null);
         return;
       }
 
-      const hit = hits[0].object;
+      // Hover IN - find the pin group
+      let obj: Object3D | null = hits[0].object;
+      while (obj && !pinsRef.current.includes(obj)) obj = obj.parent;
+      if (!obj) return;
 
-      if (hit === lastHovered) return; // prevent firing repeatedly
-      lastHovered = hit;
+      const pin = obj;
+
+      if (pin === lastHoveredPin) return;
+
+      // Reset previous pin
+      if (lastHoveredPin) {
+        const prev = (lastHoveredPin.userData as any).head;
+        if (prev) tweenScale(prev, 1.0, 180);
+      }
+
+      lastHoveredPin = pin;
+
+      const head = (pin.userData as any).head;
+      if (head) {
+        tweenScale(head, 2, 0.2);
+
+        shrinkTimeout = window.setTimeout(() => {
+          tweenScale(head, 1.0, 200);
+        }, 1000);
+      }
+
+      // Correct player info
+      const info = (pin.userData as any).player as PlayerInfo;
 
       const headLocal = new Vector3(0, 10, 0);
-      const headWorld = hit.localToWorld(headLocal.clone());
-
-      const info = hit.userData as PlayerInfo;
+      const headWorld = pin.localToWorld(headLocal.clone());
 
       onPinHover?.(info, headWorld, camera);
     };
 
-    gl.domElement.addEventListener("pointermove", onMove);
-    return () => gl.domElement.removeEventListener("pointermove", onMove);
+    gl.domElement.addEventListener("pointermove", handleMove);
+    return () => gl.domElement.removeEventListener("pointermove", handleMove);
   }, [gl, camera, onPinHover]);
 
   return null;
 }
 
-
 /* -------------------------------------------------------------------------- */
-/*                                   WORLD                                    */
+/*                                  WORLD                                      */
 /* -------------------------------------------------------------------------- */
 
 export function World({ globeConfig, data, onPinClick }: WorldProps) {
-  const [camera] = useState(() => new PerspectiveCamera(45, 1.2, 0.1, 2000));
+  const [camera] = useState(() => new PerspectiveCamera(45, 1.2, 0.1, 1000));
   const pinsRef = useRef<Object3D[]>([]);
 
   useEffect(() => {
     camera.position.set(0, 0, 330);
   }, [camera]);
 
-  const addPinToScene = (pin: Object3D) => pinsRef.current.push(pin);
+  const addPinToScene = (pin: Object3D) => {
+    pinsRef.current.push(pin);
+  };
 
   return (
     <Canvas camera={camera} gl={{ antialias: true, alpha: true }}>
-      {/* Ambient fill → bright glossy top */}
       <ambientLight
         intensity={globeConfig.ambientLightIntensity}
         color={globeConfig.ambientLight}
       />
 
-      {/* Main top light → glossy silver highlight */}
       <directionalLight
         position={[0, 400, 300]}
         intensity={globeConfig.pointLightIntensity}
@@ -216,7 +268,7 @@ export function World({ globeConfig, data, onPinClick }: WorldProps) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                                   GLOBE                                     */
+/*                                  GLOBE                                      */
 /* -------------------------------------------------------------------------- */
 
 export function Globe({ globeConfig, data, addPinToScene }: GlobeProps) {
@@ -224,29 +276,28 @@ export function Globe({ globeConfig, data, addPinToScene }: GlobeProps) {
   const groupRef = useRef<Group | null>(null);
   const [ready, setReady] = useState(false);
 
-  /* Init ThreeGlobe */
+  // Initialize ThreeGlobe
   useEffect(() => {
-    if (!globeRef.current && groupRef.current) {
+    if (groupRef.current && !globeRef.current) {
       globeRef.current = new ThreeGlobe();
       groupRef.current.add(globeRef.current);
       setReady(true);
     }
   }, []);
 
-  /* Material updates */
+  // Material settings
   useEffect(() => {
     if (!ready) return;
 
     const mat = globeRef.current.globeMaterial();
-
     mat.color = new Color(globeConfig.globeColor);
     mat.emissive = new Color(globeConfig.emissive);
     mat.emissiveIntensity = globeConfig.emissiveIntensity;
     mat.shininess = globeConfig.shininess;
-    mat.specular = new Color("#ffffff"); // glossy white highlight
+    mat.specular = new Color("#ffffff");
   }, [ready, globeConfig]);
 
-  /* Atmosphere + polygons + pins */
+  // Add polygons & pins
   useEffect(() => {
     if (!ready) return;
 
@@ -259,17 +310,18 @@ export function Globe({ globeConfig, data, addPinToScene }: GlobeProps) {
       .atmosphereAltitude(globeConfig.atmosphereAltitude)
       .hexPolygonColor(() => globeConfig.polygonColor);
 
-    /* Add pins */
     data.forEach((p) => {
       const pin = createPin(p.color);
       const pos = latLngToXYZ(p.lat, p.lng, 100);
 
       pin.position.copy(pos);
-      pin.userData = p;
-      pin.children.forEach((child) => (child.userData = p));
 
-      groupRef.current!.add(pin);
+      // Store player & head on the pin
+      (pin.userData as any).player = p;
+      (pin.userData as any).head = pin.children[0];
+
       addPinToScene(pin);
+      groupRef.current!.add(pin);
     });
   }, [ready, data, globeConfig]);
 
